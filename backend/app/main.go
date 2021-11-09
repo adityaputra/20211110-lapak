@@ -23,7 +23,7 @@ func connect() (*sql.DB, error) {
 	return sql.Open("mysql", fmt.Sprintf("root:%s@tcp(db:3306)/example", string(bin)))
 }
 
-func blogHandler(w http.ResponseWriter, r *http.Request) {
+func mainHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connect()
 	if err != nil {
 		w.WriteHeader(500)
@@ -31,18 +31,28 @@ func blogHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT title FROM blog")
+	rows, err := db.Query("SELECT * FROM lapak")
 	if err != nil {
 		w.WriteHeader(500)
 		return
 	}
-	var titles []string
-	for rows.Next() {
-		var title string
-		err = rows.Scan(&title)
-		titles = append(titles, title)
+	type Lapak struct {
+		Id int
+		LapakName string
+		LapakOwner string
+		ProductsSold int
 	}
-	json.NewEncoder(w).Encode(titles)
+	var lapaks []*Lapak
+	for rows.Next() {
+		lapak := new(Lapak)
+		err := rows.Scan(&lapak.Id, &lapak.LapakName, &lapak.LapakOwner, &lapak.ProductsSold)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		lapaks = append(lapaks, lapak)
+	}
+	json.NewEncoder(w).Encode(lapaks)
 }
 
 func main() {
@@ -53,7 +63,8 @@ func main() {
 
 	log.Print("Listening 8000")
 	r := mux.NewRouter()
-	r.HandleFunc("/", blogHandler)
+	r.HandleFunc("/", mainHandler)
+	r.HandleFunc("/db", mainHandler)
 	log.Fatal(http.ListenAndServe(":8000", handlers.LoggingHandler(os.Stdout, r)))
 }
 
@@ -71,18 +82,18 @@ func prepare() error {
 		time.Sleep(time.Second)
 	}
 
-	if _, err := db.Exec("DROP TABLE IF EXISTS blog"); err != nil {
+	if _, err := db.Exec("DROP TABLE IF EXISTS lapak"); err != nil {
 		return err
 	}
 
-	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS blog (id int NOT NULL AUTO_INCREMENT, title varchar(255), PRIMARY KEY (id))"); err != nil {
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS lapak (id INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(id), lapak_name VARCHAR(256) NOT NULL, lapak_owner VARCHAR(256) NOT NULL, products_sold INT NOT NULL);"); err != nil {
 		return err
 	}
+        for i := 0; i < 5; i++ {
+                if _, err := db.Exec("INSERT INTO lapak (lapak_name, lapak_owner, products_sold) VALUES (?, ?, ?);", fmt.Sprintf("lapak%d", i), fmt.Sprintf("budi%d", i), fmt.Sprintf("%d", i)); err != nil {
+                        return err
+                }
+        }
 
-	for i := 0; i < 5; i++ {
-		if _, err := db.Exec("INSERT INTO blog (title) VALUES (?);", fmt.Sprintf("Blog post #%d", i)); err != nil {
-			return err
-		}
-	}
 	return nil
 }
