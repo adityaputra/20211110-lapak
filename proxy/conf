@@ -4,5 +4,12 @@ server {
     location / {
         proxy_pass   http://backend:8000;
     }
+    location /healthz {
+        stub_status on;
+        allow all;
+    }
+    location /metrics {
+        proxy_pass   http://prometheus:9090/metrics;
+    }
 
 }
