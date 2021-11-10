@@ -82,12 +82,39 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func cacheHandler(w http.ResponseWriter, r *http.Request) {
+	type Cache struct {
+		Key string
+		Value string
+	}
 	switch r.Method {
 		case "POST":
-			type Cache struct {
-				Key string
-				Value string
+			var c Cache
+			decoder := json.NewDecoder(r.Body)
+			err := decoder.Decode(&c)
+			if err != nil {
+				panic(err)
 			}
+			fmt.Println(c)
+			if c.Key == "" {
+				fmt.Fprintf(w, "ERROR: key variable is required")
+				return
+			}
+			if c.Value == "" {
+				fmt.Fprintf(w, "ERROR: value variable is required")
+				return
+			}
+
+			fmt.Println("Go Redis Connection Test")
+			client := redis.NewClient(&redis.Options{
+				Addr: "redis:6379",
+				Password: "",
+				DB: 0,
+			})
+
+			insert := client.Set(c.Key, c.Value, 0)
+			fmt.Println(insert)
+			fmt.Fprintf(w, "ok")
+		case "GET":
 			var c Cache
 			decoder := json.NewDecoder(r.Body)
 			err := decoder.Decode(&c)
@@ -107,11 +134,9 @@ func cacheHandler(w http.ResponseWriter, r *http.Request) {
 				DB: 0,
 			})
 
-			insert := client.Set(c.Key, c.Value, 0)
-			fmt.Println(insert)
-			fmt.Fprintf(w, "ok")
-		case "GET":
-			fmt.Fprintf(w, "cache get")
+			get := client.Get(c.Key)
+			fmt.Println(get.Val())
+			json.NewEncoder(w).Encode(get.Val())
 		default:
 			fmt.Fprintf(w, "Sorry, only GET and POST methods are supported.")
 	}
