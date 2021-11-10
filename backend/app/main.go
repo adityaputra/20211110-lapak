@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"os"
 	"time"
+	//"context"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/go-redis/redis"
 )
 
 func connect() (*sql.DB, error) {
@@ -82,7 +84,32 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 func cacheHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 		case "POST":
-			fmt.Fprintf(w, "cache post")
+			type Cache struct {
+				Key string
+				Value string
+			}
+			var c Cache
+			decoder := json.NewDecoder(r.Body)
+			err := decoder.Decode(&c)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(c)
+			if c.Key == "" {
+				fmt.Fprintf(w, "ERROR: key variable is required")
+				return
+			}
+
+			fmt.Println("Go Redis Connection Test")
+			client := redis.NewClient(&redis.Options{
+				Addr: "redis:6379",
+				Password: "",
+				DB: 0,
+			})
+
+			insert := client.Set(c.Key, c.Value, 0)
+			fmt.Println(insert)
+			fmt.Fprintf(w, "ok")
 		case "GET":
 			fmt.Fprintf(w, "cache get")
 		default:
@@ -93,7 +120,31 @@ func cacheHandler(w http.ResponseWriter, r *http.Request) {
 func cacheListHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 		case "GET":
-			fmt.Fprintf(w, "cachelist get")
+			fmt.Println("Go Redis Connection Test")
+			client := redis.NewClient(&redis.Options{
+				Addr: "redis:6379",
+				Password: "",
+				DB: 0,
+			})
+
+			pong, err := client.Ping().Result()
+			fmt.Println(pong, err)
+
+			//ctx := context.Background()
+			//val, err := client.Get("key").Result()
+			//fmt.Println(val)
+			var keys []string
+			iter := client.Scan(0, "", 0).Iterator()
+			for iter.Next() {
+				fmt.Println("iterating")
+				fmt.Println("keys", iter.Val())
+				keys = append(keys, iter.Val())
+			}
+			if err := iter.Err(); err != nil {
+				panic(err)
+			}
+			json.NewEncoder(w).Encode(keys)
+
 		default:
 			fmt.Fprintf(w, "Sorry, only GET method is supported.")
 	}
