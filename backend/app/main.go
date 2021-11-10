@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -15,17 +14,23 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/go-redis/redis"
+
 )
 
 func connect() (*sql.DB, error) {
-	bin, err := ioutil.ReadFile("/run/secrets/db-password")
-	if err != nil {
-		return nil, err
-	}
-	return sql.Open("mysql", fmt.Sprintf("root:%s@tcp(db:3306)/example", string(bin)))
+	addr := os.Getenv("MYSQL_ADDRESS")
+	user := os.Getenv("MYSQL_USER")
+	pass := os.Getenv("MYSQL_PASS")
+	db := os.Getenv("MYSQL_DB")
+	return sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", string(user), string(pass), string(addr), string(db)))
 }
 
 func mainHandler(w http.ResponseWriter, r *http.Request) {
+	enabled := os.Getenv("MYSQL_ENABLED")
+	if enabled != "true" {
+		fmt.Fprintf(w, "ERROR: MySQL is disabled")
+		return
+	}
 	db, err := connect()
 	if err != nil {
 		w.WriteHeader(500)
@@ -82,6 +87,11 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func cacheHandler(w http.ResponseWriter, r *http.Request) {
+	enabled := os.Getenv("REDIS_ENABLED")
+	if enabled != "true" {
+		fmt.Fprintf(w, "ERROR: Redis is disabled")
+		return
+	}
 	type Cache struct {
 		Key string
 		Value string
@@ -104,9 +114,10 @@ func cacheHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			addr := os.Getenv("REDIS_ADDRESS") 
 			fmt.Println("Go Redis Connection Test")
 			client := redis.NewClient(&redis.Options{
-				Addr: "redis:6379",
+				Addr: fmt.Sprintf("%s:6379", addr),
 				Password: "",
 				DB: 0,
 			})
@@ -127,9 +138,10 @@ func cacheHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			addr := os.Getenv("REDIS_ADDRESS") 
 			fmt.Println("Go Redis Connection Test")
 			client := redis.NewClient(&redis.Options{
-				Addr: "redis:6379",
+				Addr: fmt.Sprintf("%s:6379", addr),
 				Password: "",
 				DB: 0,
 			})
@@ -143,11 +155,17 @@ func cacheHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func cacheListHandler(w http.ResponseWriter, r *http.Request) {
+	enabled := os.Getenv("REDIS_ENABLED")
+	if enabled != "true" {
+		fmt.Fprintf(w, "ERROR: Redis is disabled")
+		return
+	}
 	switch r.Method {
 		case "GET":
+			addr := os.Getenv("REDIS_ADDRESS") 
 			fmt.Println("Go Redis Connection Test")
 			client := redis.NewClient(&redis.Options{
-				Addr: "redis:6379",
+				Addr: fmt.Sprintf("%s:6379", addr),
 				Password: "",
 				DB: 0,
 			})
@@ -187,7 +205,8 @@ func main() {
 	r.HandleFunc("/db", mainHandler)
 	r.HandleFunc("/cache", cacheHandler)
 	r.HandleFunc("/cache/list", cacheListHandler)
-	log.Fatal(http.ListenAndServe(":8000", handlers.LoggingHandler(os.Stdout, r)))
+	port := os.Getenv("LISTEN_PORT") 
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), handlers.LoggingHandler(os.Stdout, r)))
 }
 
 func prepare() error {

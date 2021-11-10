@@ -3,6 +3,9 @@ services:
     build: backend
     secrets:
       - db-password
+      - backend-env
+    env_file:
+      - ./backend/.env
     depends_on:
       db:
         condition: service_healthy
@@ -67,3 +70,5 @@ volumes:
 secrets:
   db-password:
     file: db/password.txt
+  backend-env:
+    file: backend/.env
