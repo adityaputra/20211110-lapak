@@ -31,28 +31,72 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT * FROM lapak")
-	if err != nil {
-		w.WriteHeader(500)
-		return
+	switch r.Method {
+		case "POST":
+			decoder := json.NewDecoder(r.Body)
+			type LapakInput struct {
+				Name string
+				Owner string
+				Products_Sold int
+			}
+			var t LapakInput 
+			err := decoder.Decode(&t)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintf(w, t.Name)
+
+                if _, err := db.Exec("INSERT INTO lapak (lapak_name, lapak_owner, products_sold) VALUES (?, ?, ?);", (t.Name), (t.Owner), (t.Products_Sold)); err != nil {
+                        return
+                }
+
+		case "GET":
+			rows, err := db.Query("SELECT * FROM lapak")
+			if err != nil {
+				w.WriteHeader(500)
+				return
+			}
+			type Lapak struct {
+				Id int
+				LapakName string
+				LapakOwner string
+				ProductsSold int
+			}
+			var lapaks []*Lapak
+			for rows.Next() {
+				lapak := new(Lapak)
+				err := rows.Scan(&lapak.Id, &lapak.LapakName, &lapak.LapakOwner, &lapak.ProductsSold)
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				lapaks = append(lapaks, lapak)
+			}
+			json.NewEncoder(w).Encode(lapaks)
+		default:
+			fmt.Fprintf(w, "Sorry, only GET and POST methods are supported.")
 	}
-	type Lapak struct {
-		Id int
-		LapakName string
-		LapakOwner string
-		ProductsSold int
+
+}
+
+func cacheHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+		case "POST":
+			fmt.Fprintf(w, "cache post")
+		case "GET":
+			fmt.Fprintf(w, "cache get")
+		default:
+			fmt.Fprintf(w, "Sorry, only GET and POST methods are supported.")
 	}
-	var lapaks []*Lapak
-	for rows.Next() {
-		lapak := new(Lapak)
-		err := rows.Scan(&lapak.Id, &lapak.LapakName, &lapak.LapakOwner, &lapak.ProductsSold)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		lapaks = append(lapaks, lapak)
+}
+
+func cacheListHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+		case "GET":
+			fmt.Fprintf(w, "cachelist get")
+		default:
+			fmt.Fprintf(w, "Sorry, only GET method is supported.")
 	}
-	json.NewEncoder(w).Encode(lapaks)
 }
 
 func main() {
@@ -65,6 +109,8 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", mainHandler)
 	r.HandleFunc("/db", mainHandler)
+	r.HandleFunc("/cache", cacheHandler)
+	r.HandleFunc("/cache/list", cacheListHandler)
 	log.Fatal(http.ListenAndServe(":8000", handlers.LoggingHandler(os.Stdout, r)))
 }
 
